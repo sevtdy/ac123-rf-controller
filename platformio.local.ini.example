@@ -1,0 +1,6 @@
+[env:nodemcuv2]
+upload_port = /dev/cu.usbserial-1410
+monitor_port = /dev/cu.usbserial-1410
+build_flags = 
+  -D WIFI_SSID=\"ssid\"
+  -D WIFI_PASSWD=\"passwd\"
