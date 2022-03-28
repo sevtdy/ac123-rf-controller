@@ -39,8 +39,6 @@ void sendRfSignal(byte channel, byte action)
     }
   }
   rfTransmitter.send(sendCodeChar);
-  Serial.print("sended code:");
-  Serial.println(sendCodeChar);
   Serial.printf("sended code: %s \n", sendCodeChar);
 };
 void handleRoot()
@@ -71,9 +69,9 @@ void handleAction()
   int offset = channel.toInt();
   for (int i = 0; i < 3; i++)
   {
-    digitalWrite(LED_BUILTIN, HIGH);
-    delay(100);
     digitalWrite(LED_BUILTIN, LOW);
+    delay(100);
+    digitalWrite(LED_BUILTIN, HIGH);
     delay(100);
   }
   if (action == "up")
@@ -98,7 +96,7 @@ void setup()
   // put your setup code here, to run once:
   Serial.begin(9600);
   pinMode(LED_BUILTIN, OUTPUT);
-  digitalWrite(LED_BUILTIN, LOW);
+  digitalWrite(LED_BUILTIN, HIGH);
 
   Serial.println("");
   Serial.println("setting up rf transmitter");
