@@ -120,7 +120,7 @@ void setup()
   rfTransmitter.setProtocol(customprotocol);
 
   Serial.println("setting up WiFi");
-  WiFi.mode(WIFI_AP);
+  WiFi.setPhyMode(WIFI_PHY_MODE_11N);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
   {
