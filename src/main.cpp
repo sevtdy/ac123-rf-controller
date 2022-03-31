@@ -121,6 +121,7 @@ void setup()
 
   Serial.println("setting up WiFi");
   WiFi.setPhyMode(WIFI_PHY_MODE_11N);
+  WiFi.setAutoReconnect(true);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
   {
