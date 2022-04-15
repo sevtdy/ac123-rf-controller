@@ -121,13 +121,16 @@ void setup()
 
   Serial.println("setting up WiFi");
   WiFi.setPhyMode(WIFI_PHY_MODE_11N);
+  WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
+  WiFi.setSleepMode(WIFI_NONE_SLEEP);
   WiFi.begin(ssid, password);
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
     Serial.print(".");
   }
+  digitalWrite(LED_BUILTIN, HIGH);
   Serial.println("");
   Serial.print("Connected to ");
   Serial.println(ssid);
