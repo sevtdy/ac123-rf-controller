@@ -3,12 +3,13 @@
 #include <RCSwitch.h>
 #include <uri/UriRegex.h>
 
-const char *ssid = WIFI_SSID;
-const char *password = WIFI_PASSWD;
+// WIFI_SSID, WIFI_PASSWD inject from env
 ESP8266WebServer server(80);
 
+const unsigned long REMOTE_6_13 = 0xa35073f3;
 const unsigned long REMOTE_6_14 = 0xa329b02d;
 const unsigned long REMOTE_6_15 = 0xa3507273;
+const unsigned long REMOTE_6_16 = 0xa3514e0f;
 
 const byte CHANNEL_PADDING = 0b00000000;
 const byte UP = 0b00001011;
@@ -21,10 +22,10 @@ void sendRfSignal(unsigned long deviceId, byte channel, byte action)
 {
   byte idByte1 = deviceId >> 24;
   byte idByte2 = deviceId >> 16;
-  byte idbyte3 = deviceId >> 8;
+  byte idByte3 = deviceId >> 8;
   byte idByte4 = deviceId;
-  byte checksum = idByte2 + idbyte3 + idByte4 + channel + CHANNEL_PADDING + action;
-  byte arr[] = {idByte1, idByte2, idbyte3, idByte4, channel, CHANNEL_PADDING, action, checksum};
+  byte checksum = idByte2 + idByte3 + idByte4 + channel + CHANNEL_PADDING + action;
+  byte arr[] = {idByte1, idByte2, idByte3, idByte4, channel, CHANNEL_PADDING, action, checksum};
   char code[64];
   for (int i = 0; i < 8; i++)
   {
@@ -90,7 +91,24 @@ void handleTask()
   String action = server.pathArg(2);
   Serial.printf("remote:%s, channel:%s, action:%s \n", remote.c_str(), channel.c_str(), action.c_str());
   byte channelByte = channel == "all" ? 0b11111111 : 0b1 << (channel.toInt() - 1);
-  unsigned long remoteHex = remote == "14" ? REMOTE_6_14 : REMOTE_6_15;
+  unsigned long remoteHex;
+  switch (remote.toInt())
+  {
+  case 13:
+    remoteHex = REMOTE_6_13;
+    break;
+  case 14:
+    remoteHex = REMOTE_6_14;
+    break;
+  case 15:
+    remoteHex = REMOTE_6_15;
+    break;
+  case 16:
+    remoteHex = REMOTE_6_16;
+    break;
+  default:
+    return;
+  }
   if (action == "up")
   {
     sendRfSignal(remoteHex, channelByte, UP);
@@ -124,7 +142,7 @@ void setup()
   WiFi.mode(WIFI_STA);
   WiFi.setAutoReconnect(true);
   WiFi.setSleepMode(WIFI_NONE_SLEEP);
-  WiFi.begin(ssid, password);
+  WiFi.begin(WIFI_SSID, WIFI_PASSWD);
   while (WiFi.status() != WL_CONNECTED)
   {
     delay(500);
@@ -133,7 +151,7 @@ void setup()
   digitalWrite(LED_BUILTIN, HIGH);
   Serial.println("");
   Serial.print("Connected to ");
-  Serial.println(ssid);
+  Serial.println(WIFI_SSID);
   Serial.print("IP address: ");
   Serial.println(WiFi.localIP());
   Serial.print("Mac address: ");
@@ -142,7 +160,7 @@ void setup()
   // setting up server
   server.on("/", handleRoot);
   server.on(UriRegex("^\\/channel\\/([1-3])\\/(up|stop|down)$"), redirectToNewPath);
-  server.on(UriRegex("^\\/floor\\/6\\/remote\\/(14|15)\\/channel\\/([1-3]|all)\\/(up|stop|down)$"), handleTask);
+  server.on(UriRegex("^\\/floor\\/6\\/remote\\/(1[3-6])\\/channel\\/([1-3]|all)\\/(up|stop|down)$"), handleTask);
   server.onNotFound(handleNotFound);
   server.begin();
   Serial.print("HTTP server started. Runing on: http://");
