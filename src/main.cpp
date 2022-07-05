@@ -1,10 +1,12 @@
 #include <ESP8266WiFi.h>
-#include <ESP8266WebServer.h>
+#include <PubSubClient.h>
 #include <RCSwitch.h>
 #include <uri/UriRegex.h>
 
-// WIFI_SSID, WIFI_PASSWD inject from env
-ESP8266WebServer server(80);
+WiFiClient espClient;
+PubSubClient mqttClient;
+
+// WIFI_SSID, WIFI_PASSWD, MQTT_SERVER inject from env
 
 const unsigned long REMOTE_6_13 = 0xa35073f3;
 const unsigned long REMOTE_6_14 = 0xa329b02d;
@@ -26,7 +28,8 @@ void sendRfSignal(unsigned long deviceId, byte channel, byte action)
   byte idByte4 = deviceId;
   byte checksum = idByte2 + idByte3 + idByte4 + channel + CHANNEL_PADDING + action;
   byte arr[] = {idByte1, idByte2, idByte3, idByte4, channel, CHANNEL_PADDING, action, checksum};
-  char code[64];
+  char code[65];
+  code[64] = '\0';
   for (int i = 0; i < 8; i++)
   {
     for (int j = 0; j < 8; j++)
@@ -52,44 +55,10 @@ void sendRfSignal(unsigned long deviceId, byte channel, byte action)
   Serial.printf("sended code: %s \n", code);
 }
 
-void handleRoot()
+void handleTask(String remote, String channel, String action)
 {
-  server.send(200, "text/plain", "hello from esp8266!\r\n");
-}
-
-void redirectToNewPath()
-{
-  String channel = server.pathArg(0);
-  String action = server.pathArg(1);
-  String newPath = "/floor/6/remote/14/channel/" + channel + "/" + action;
-  Serial.printf("redirect to: %s \n", newPath.c_str());
-  server.sendHeader("Location", newPath, true);
-  server.send(301, "text/plain", "");
-}
-
-void handleNotFound()
-{
-  String message = "File Not Found\n\n";
-  message += "URI: ";
-  message += server.uri();
-  message += "\nMethod: ";
-  message += (server.method() == HTTP_GET) ? "GET" : "POST";
-  message += "\nArguments: ";
-  message += server.args();
-  message += "\n";
-  for (uint8_t i = 0; i < server.args(); i++)
-  {
-    message += " " + server.argName(i) + ": " + server.arg(i) + "\n";
-  }
-  server.send(404, "text/plain", message);
-}
-
-void handleTask()
-{
-  String remote = server.pathArg(0);
-  String channel = server.pathArg(1);
-  String action = server.pathArg(2);
   Serial.printf("remote:%s, channel:%s, action:%s \n", remote.c_str(), channel.c_str(), action.c_str());
+  Serial.println("-----------------------");
   byte channelByte = channel == "all" ? 0b11111111 : 0b1 << (channel.toInt() - 1);
   unsigned long remoteHex;
   switch (remote.toInt())
@@ -109,20 +78,70 @@ void handleTask()
   default:
     return;
   }
+  Serial.print(remoteHex);
   if (action == "up")
   {
     sendRfSignal(remoteHex, channelByte, UP);
   }
   else if (action == "stop")
   {
-
     sendRfSignal(remoteHex, channelByte, STOP);
   }
   else
   {
     sendRfSignal(remoteHex, channelByte, DOWN);
   }
-  server.send(200, "text/plain", "ok");
+}
+
+void mqttCallback(char *topic, byte *payload, unsigned int length)
+{
+  Serial.print("Message arrived in topic: ");
+  Serial.println(topic);
+  Serial.print("Message:");
+  char command[12];
+  for (unsigned int i = 0; i < length; i++)
+  {
+    command[i] = (char)payload[i];
+  }
+  command[length] = '\0';
+  // e.g. "14,3,up"
+  Serial.print(command);
+  Serial.println();
+  Serial.println("-----------------------");
+
+  byte tokenIndex = 0;
+  char *tokens[3];
+  char *token = strtok(command, ",");
+  while (token != NULL)
+  {
+    tokens[tokenIndex] = token;
+    tokenIndex++;
+    token = strtok(NULL, ",");
+  }
+
+  handleTask(String(tokens[0]), String(tokens[1]), String(tokens[2]));
+}
+
+void connectMqtt()
+{
+  // Loop until we're reconnected
+  while (!mqttClient.connected())
+  {
+    Serial.print("Attempting MQTT connection...");
+    // Attempt to connect
+    if (mqttClient.connect("ESP8266Client"))
+    {
+      Serial.println("connected");
+      mqttClient.subscribe("ac123");
+    }
+    else
+    {
+      Serial.print("failed, rc=");
+      Serial.print(mqttClient.state());
+      Serial.println(" try again in 5 seconds");
+      delay(5000);
+    }
+  }
 }
 
 void setup()
@@ -157,19 +176,18 @@ void setup()
   Serial.print("Mac address: ");
   Serial.println(WiFi.macAddress());
 
-  // setting up server
-  server.on("/", handleRoot);
-  server.on(UriRegex("^\\/channel\\/([1-3])\\/(up|stop|down)$"), redirectToNewPath);
-  server.on(UriRegex("^\\/floor\\/6\\/remote\\/(1[3-6])\\/channel\\/([1-3]|all)\\/(up|stop|down)$"), handleTask);
-  server.onNotFound(handleNotFound);
-  server.begin();
-  Serial.print("HTTP server started. Runing on: http://");
-  Serial.print(WiFi.localIP());
-  Serial.println(":80");
+  // setting up mqtt client
+  mqttClient.setClient(espClient);
+  mqttClient.setServer(MQTT_SERVER, 3001);
+  mqttClient.setCallback(mqttCallback);
 }
 
 void loop()
 {
   // put your main code here, to run repeatedly:
-  server.handleClient();
+  if (!mqttClient.connected())
+  {
+    connectMqtt();
+  }
+  mqttClient.loop();
 }
